@@ -1,0 +1,775 @@
+#get working path
+getwd()
+
+#setup working path
+setwd('C:/Users/Pragya/Documents/DA/')
+
+#load data
+myProjectdata=read.table("hour.csv",head =T,sep=',')
+
+
+#Find the total number of data : 7538
+dim(myProjectdata)
+
+
+#Check first few data
+head(myProjectdata)
+
+
+#Check last few data
+tail(myProjectdata)
+
+
+#Check the datatype of data
+str(myProjectdata)
+
+
+summary(myProjectdata)
+
+#To check if any missing value is present in data : No missing value 
+table(is.na(myProjectdata))
+
+
+#Create local variables
+
+season = myProjectdata$season
+month =myProjectdata$month
+hour=myProjectdata$hour
+IsHoliday = myProjectdata$IsHoliday
+IsWeekday=myProjectdata$IsWeekday
+IsWorkingday = myProjectdata$IsWorkingday
+weathersituation = myProjectdata$weathersituation
+temp=myProjectdata$temp
+humidity=myProjectdata$humidity
+windspeed=myProjectdata$windspeed
+bikeCount=myProjectdata$bikeCount
+
+
+#find the corrleation 
+cor(cbind(bikeCount,season,month,hour,IsWeekday,IsWorkingday,IsHoliday,weathersituation,temp,windspeed,humidity))
+
+
+#create a copy of data in new data frame and work on this data frame to create dummy variable
+
+NewProjectdata <- myProjectdata
+
+head(NewProjectdata)
+
+
+
+#data Pre-preocessing
+#month converted to categories by using median
+
+NewProjectdata$month <- cut(NewProjectdata$month, breaks=c(-Inf,6,Inf), labels=c("m1","m2"),right=FALSE)
+month=NewProjectdata$month
+
+
+#hour converted to catergories by using median 
+
+NewProjectdata$hour <- cut(NewProjectdata$hour, breaks=c(-Inf,12,Inf), labels=c("h1","h2"),right=FALSE)
+hour=NewProjectdata$hour
+hour
+
+head(NewProjectdata)
+
+
+#Convert Nominal variable to dummy variable :
+
+library(dummies)
+data=dummy.data.frame(NewProjectdata,names=c("month","hour","season","weathersituation"))
+
+head(data)
+
+season1 = data$season1
+season2 = data$season2
+season3 = data$season3
+season4 = data$season4
+monthm1=data$monthm1
+monthm2=data$monthm2
+hourh1=data$hourh1
+hourh2=data$hourh2
+wsit1=data$weathersituation1
+wsit2=data$weathersituation2
+wsit3=data$weathersituation3
+wsit4=data$weathersituation4
+
+
+
+#Check correlation
+
+head(data)
+cor(cbind(bikeCount1,season1,season2,season3,season4,monthm1,monthm2,hourh1,hourh2,IsHoliday,IsWeekday,
+          IsWorkingday,wsit1,wsit2,wsit3,wsit4,temp,humidity1,windspeed1))
+
+plot(myProjectdata)
+
+
+
+#Transformation on x and y variable 
+
+bikeCount1=log(bikeCount)
+humidity1 = humidity*humidity
+windspeed1 = 1/windspeed
+
+
+
+#Old data set which contain variables before pre-processingwithout dummy variables
+#added transformed variable to old data set which contains unprocessed data
+
+myProjectdata[,"bikeCount1"]=bikeCount1
+myProjectdata[,"humidity1"]=humidity1
+myProjectdata[,"windspeed1"]=windspeed1
+head(myProjectdata)
+
+
+
+#new dataset containing dummy variables after pre-processing
+#added transformed variable to the new data set
+
+data[,"bikeCount1"]=bikeCount1
+data[,"humidity1"]=humidity1
+data[,"windspeed1"]=windspeed1
+head(data)
+
+
+
+#model1 using glm()
+#model creation 
+#Full model with only numerical variables :
+
+full = glm(bikeCount1~temp+humidity+humidity1+windspeed1,data=myProjectdata)
+
+summary(full)
+#AIC : 24581
+
+
+#bakcward elimination ,forward selction and both using step fn
+#Base model considering "temp" as independent variable 
+
+base=glm(bikeCount1~temp,data=myProjectdata)
+summary(base)
+#AIC : 25437
+
+
+
+#Stepwise regression
+#Backward stepwise
+
+backward=step(full,direction="backward",trace=T,data=myProjectdata)
+summary(backward)
+#AIC :24581
+
+
+#Forward stepwise
+
+forward = step(base,scope=list(upper=full,lower=~1),direction= "forward",trace=F)
+summary(forward)
+#AIC : 24581
+
+
+
+#both stepwise
+
+both = step(base,scope=list(upper=full,lower=~1),direction= "both",trace=F)
+summary(both)
+#AIC : 24581
+
+#AIC value for all the models are same
+
+
+#model 1 using lm()
+#Since I have transformed the y-variable to log(y) ,so I have also used lm()to build the models as per comments given by prof in order to 
+#get better prediction
+
+full_lm= lm(bikeCount1~temp+humidity+humidity1+windspeed1,data=myProjectdata,x=T,y=T)
+summary(full_lm)   #final model 
+
+
+backward_lm=step(full_lm,direction="backward",trace=T,data=myProjectdata)
+summary(backward_lm)  #final model 
+
+#Both full_lm and backward_lm have same adjusted R-square
+
+
+
+#Residual analysis on full model
+
+res=rstandard(full)
+attach(mtcars)
+par(mfrow=c(2,3))
+plot(fitted(full),res,main="Predicted vs residuals plot")
+abline(a=0,b=0,col='red')
+plot(temp, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+plot(humidity, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+plot(humidity1, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+plot(windspeed1, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+qqnorm(res)
+qqline(res,col=2)
+
+
+
+#Check for multicollinearity
+
+library(car)
+vif(full)
+
+
+#removed humidity1 from the full model,multicolliniarity probelm was resolved but model mse and AIC value has increased.
+
+full_new = glm(bikeCount1~temp+humidity+windspeed1,data=myProjectdata)
+
+summary(full_new)
+
+
+#Check MSE
+
+library(boot)
+mse_full = cv.glm(myProjectdata,full_new,K=10)$delta
+mse_full
+
+
+
+#Check for Influencial points and remove the influencial points 
+
+library(stats)
+options(max.print=1000000)
+#cutoff = 4/7538 = 
+x=influence.measures(full)
+summary(x)
+
+
+#remove influencial points
+cooksd <- cooks.distance(full)
+influential <- as.numeric(names(cooksd)[(cooksd > (4/7538))])
+data1<-myProjectdata
+data1<-data1[-influential,]
+dim(data1)
+head(data1)
+
+
+#improved model after removing influencial point 
+
+m1 = glm(bikeCount1~temp+humidity+humidity1+windspeed1,data=data1)
+summary(m1)
+
+
+#Calcualte MSE
+mse_m1 = cv.glm(data1,m1,K=10)$delta
+mse_m1
+
+#model has improved as MSE is less than previous model
+
+
+#model 2 using lm()
+#full model considering discrete variable but without pre-processing
+
+full1 = glm(bikeCount1~temp+humidity+humidity1+windspeed1+season+month+hour+IsWeekday+
+        IsWorkingday+weathersituation+IsHoliday,data=myProjectdata)
+#AIC 21843
+summary(full1)
+
+#using glm()
+#stepwise regression
+#Backward model 
+
+backward1=step(full1,direction="backward",trace=T)
+summary(backward1)
+#AIC : 21843
+
+#forward model
+
+forward1 = step(base,scope=list(upper=full1,lower=~1),direction= "forward",trace=F)
+summary(forward1)
+#AIC : 21843
+
+#both
+
+both1 = step(base,scope=list(upper=full1,lower=~1),direction= "both",trace=F)
+summary(both1)
+#AIC : 21843
+
+
+
+#model 2 using lm()
+#Since I have log as y -variable ,so I have used lm to build the models 
+
+full1_lm=  lm(bikeCount1~temp+humidity+humidity1+windspeed1+season+month+hour+IsWeekday+
+                IsWorkingday+weathersituation+IsHoliday,data=myProjectdata,x=T,y=T)
+summary(full1_lm) 
+
+#Backward elimination  # p-value of IsWorkingday > 0.05 removed this 
+
+full1_lm=  lm(bikeCount1~temp+humidity+humidity1+windspeed1+season+month+hour+IsWeekday+
+                +weathersituation+IsHoliday,data=myProjectdata,x=T,y=T)
+
+
+#Backward elimination  # p-value of wathersituation  > 0.05 removed this 
+
+full1_lm=  lm(bikeCount1~temp+humidity+humidity1+windspeed1+season+month+hour+IsWeekday+
+                +IsHoliday,data=myProjectdata,x=T,y=T)  #final model 
+
+
+
+
+#Residual analysis on full1 model
+
+res=rstandard(full1)
+attach(mtcars)
+par(mfrow=c(2,3))
+plot(fitted(full1),res,main="Predicted vs residuals plot")
+abline(a=0,b=0,col='red')
+plot(temp, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+plot(humidity, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+plot(humidity1, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+plot(windspeed1, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+qqnorm(res)
+qqline(res,col=2)
+
+
+#Check for multicollinearity
+
+library(car)
+vif(full1)
+
+
+
+#Check MSE
+
+library(boot)
+mse_full1 = cv.glm(myProjectdata,full1,K=10)$delta
+mse_full1
+
+
+
+#Check for Influencial points and remove the influencial points 
+
+library(stats)
+options(max.print=1000000)
+#cutoff = 4/7538 = 
+x=influence.measures(full1)
+summary(x)
+
+
+
+#remove influencial points
+cooksd <- cooks.distance(full1)
+influential <- as.numeric(names(cooksd)[(cooksd > (4/7538))])
+data2<-myProjectdata
+data2<-data2[-influential,]
+dim(data2)
+
+
+
+#model after removing influencial point 
+m2 = glm(bikeCount1~temp+humidity+humidity1+windspeed1+season+month+hour+IsWeekday+IsWorkingday+weathersituation+
+              IsHoliday,data=data2)
+summary(m2)
+#Calcualte MSE
+
+mse_m2 = cv.glm(data2,m2,K=10)$delta
+mse_m2
+
+#model has improved as MSE is less than previous model
+
+
+#model built using lm function as it has log in y-variabe
+
+m2_lm = lm(bikeCount1~temp+humidity+humidity1+windspeed1+season+month+hour+IsWeekday+IsWorkingday+weathersituation+
+           IsHoliday,data=data2,x=T,y=T)
+summary(m2_lm)
+
+#backward elimination  #eliminate IsWeekday
+
+m2_lm = lm(bikeCount1~temp+humidity+humidity1+windspeed1+season+month+hour+IsWorkingday+weathersituation+
+             IsHoliday,data=data2,x=T,y=T)
+
+
+
+
+#model3 using glm()
+#full model considering discrete variable and pre-processing using as.factor directly when building the model
+
+full2 = glm(bikeCount1~as.factor(season)+as.factor(hour)+as.factor(IsHoliday)+as.factor(IsWeekday)
+            +temp+humidity+windspeed1,data=myProjectdata)
+
+#removed month and humidity from the above model to solve multicolliniarity issue
+
+summary(full2)
+
+#AIC 14298
+
+
+#Stepwise regression
+
+#backward 
+
+backward2=step(full2,direction="backward",trace=T)
+summary(backward2)
+#AIC : 14298
+
+#Forward
+
+forward2 = step(base,scope=list(upper=full2,lower=~1),direction= "forward",trace=F)
+summary(forward2)
+
+#AIC : 14298
+
+#Both 
+
+both2 = step(base,scope=list(upper=full2,lower=~1),direction= "forward",trace=F)
+summary(both2)
+
+#AIC : 14298
+
+
+#model 3 uisng lm()
+#Since I have log as y -variable ,so I have used lm to build the models 
+
+full2_lm = lm(bikeCount1~as.factor(season)+as.factor(hour)+as.factor(IsHoliday)+as.factor(IsWeekday)
+              +temp+humidity+windspeed1,data=myProjectdata,x=T,y=T)
+
+summary(full2_lm)
+
+backward2_lm=step(full2_lm,direction="backward",trace=T)
+summary(backward2_lm)
+
+#both model gives same result
+
+
+
+
+#Residual analysis on full2
+
+res=rstandard(full2)
+attach(mtcars)
+par(mfrow=c(2,3))
+plot(fitted(full2),res,main="Predicted vs residuals plot")
+abline(a=0,b=0,col='red')
+plot(temp, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+plot(humidity1, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+plot(humidity, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+plot(windspeed1, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+qqnorm(res)
+qqline(res,col=2)
+
+
+
+#check multicollinearity 
+library(car)
+vif(full2)
+
+
+#Check MSE
+
+library(boot)
+mse_full2 = cv.glm(myProjectdata,full2,K=10)$delta
+mse_full2
+
+
+
+#Check for Influencial points and remove the influencial points 
+
+library(stats)
+options(max.print=1000000)
+#cutoff = 4/7538 = 
+x=influence.measures(full2)
+summary(x)
+
+#remove influencial points
+cooksd <- cooks.distance(full2)
+influential <- as.numeric(names(cooksd)[(cooksd > (4/7538))])
+data3<-myProjectdata
+data3<-data3[-influential,]
+dim(data3)
+head(data1)
+
+
+
+#model after removing influencial point 
+
+m3 = glm(bikeCount1~as.factor(season)+as.factor(hour)+as.factor(IsHoliday)+as.factor(IsWeekday)
+            +temp+humidity+windspeed1,data=data3)
+summary(m3)
+#Calcualte MSE
+
+mse_m3 = cv.glm(data3,m3,K=10)$delta
+mse_m3
+
+
+m3_lm=lm(bikeCount1~as.factor(season)+as.factor(hour)+as.factor(IsHoliday)+as.factor(IsWeekday)
+          +temp+humidity+windspeed1,data=data3,x=T,y=T)
+
+summary(m3_lm)
+
+
+
+#model 4 using glm()
+#Full model after converting nominal variable to dummy
+
+full3 = glm(bikeCount1~temp+humidity+humidity1+windspeed1+as.factor(IsWeekday)+as.factor(season1)+as.factor(season2)
+            +as.factor(season3)+as.factor(monthm1)+as.factor(hourh1)+as.factor(IsHoliday),data=data)
+
+summary(full3)
+
+#AIC : 22632
+
+
+
+#Base model
+base1 = glm(bikeCount1~temp,data=data)
+summary(base1)
+
+#AIC : 25437
+
+#backward model
+
+backward3=step(full3,direction="backward",trace=T)
+summary(backward3)
+#AIC : 22632
+
+#Forward model
+
+forward3 = step(base1,scope=list(upper=full3,lower=~1),direction= "forward",trace=F,data=data)
+summary(forward3)
+
+#AIC : 22632
+
+#both 
+
+both3 = step(base1,scope=list(upper=full3,lower=~1),direction= "both",trace=F,data=data)
+summary(both3)
+
+
+#model 4 using lm()
+#Since I have log as y -variable ,so I have used lm to build the models
+
+full3_lm = lm(bikeCount1~temp+humidity+humidity1+windspeed1+as.factor(IsWeekday)+as.factor(season1)+as.factor(season2)
+              +as.factor(season3)+as.factor(monthm1)+as.factor(hourh1)+as.factor(IsHoliday),data=data,x=T,y=T)
+summary(full3_lm)
+
+backward3_lm=step(full3_lm,direction="backward",trace=T)
+summary(backward3_lm)
+
+
+
+#Residual analysis on full3
+
+res=rstandard(full3)
+attach(mtcars)
+par(mfrow=c(2,3))
+plot(fitted(full3),res,main="Predicted vs residuals plot")
+abline(a=0,b=0,col='red')
+plot(temp, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+plot(humidity1, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+plot(humidity, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+plot(windspeed1, res, main="Margin vs residual plot")
+abline(a=0,b=0,col='red')
+qqnorm(res)
+qqline(res,col=2)
+
+library(car)
+vif(full3)
+
+#Check MSE
+
+library(boot)
+mse_full3 = cv.glm(data,full3,K=10)$delta
+mse_full3
+
+#Check for Influencial points and remove the influencial points 
+
+library(stats)
+options(max.print=1000000)
+#cutoff = 4/7538 = 
+x=influence.measures(full3)
+summary(x)
+
+#remove influencial points
+cooksd <- cooks.distance(full3)
+influential <- as.numeric(names(cooksd)[(cooksd > (4/7538))])
+data4<-data
+data4<-data4[-influential,]
+dim(data4)
+
+
+#model after removing influencial point 
+
+m4 = glm(bikeCount1~temp+humidity+humidity1+windspeed1+as.factor(IsWeekday)+as.factor(season1)+as.factor(season2)
+            +as.factor(season3)+as.factor(monthm1)+as.factor(hourh1)+as.factor(IsHoliday),data=data4)
+summary(m4)
+#Calcualte MSE
+
+mse_m4 = cv.glm(data4,m4,K=10)$delta
+mse_m4
+
+#Since I have log as y -variable ,so I have used lm to build the models
+
+m4_lm = lm(bikeCount1~temp+humidity+humidity1+windspeed1+as.factor(season1)+as.factor(season2)
+         +as.factor(season3)+as.factor(monthm1)+as.factor(hourh1),data=data4,x=T,y=T)
+summary(m4_lm)
+
+
+
+#After selecting the best model "full2" and "m3" # introduce interaction term to the model 
+#Addedinteraction term "hour" to temp and "hour" to "IsWeekday" in boh the model
+
+#full2 model 
+
+full2 = glm(bikeCount1~as.factor(season)+as.factor(hour)+as.factor(IsHoliday)+as.factor(IsWeekday)
+            +temp+humidity+windspeed1,data=myProjectdata)
+
+#renamed the new model from full2 to m5 after introducing interaction term
+
+m5= glm(bikeCount1~as.factor(season)+as.factor(hour)+as.factor(IsHoliday)+as.factor(IsWeekday)+
+      as.factor(IsWeekday)*as.factor(hour)+temp+temp*as.factor(hour)+humidity+windspeed1,data=myProjectdata)
+summary(m5)   #AIC :9257.9
+
+#Check for intfluential point in both model
+
+#model m5 uisng glm()
+
+#remove influencial points
+cooksd <- cooks.distance(m5)
+influential <- as.numeric(names(cooksd)[(cooksd > (4/7538))])
+data5<-myProjectdata
+data5<-data5[-influential,]
+dim(data5)
+
+#Rebuild the model with new data set
+
+m5= glm(bikeCount1~as.factor(season)+as.factor(hour)+as.factor(IsHoliday)+as.factor(IsWeekday)+
+          as.factor(IsWeekday)*as.factor(hour)+temp+temp*as.factor(hour)+humidity+windspeed1,data=data5)
+summary(m5) 
+#AIC : 3486.9
+
+#Check MSE 
+
+mse_m5 = cv.glm(data5,m5,K=10)$delta
+mse_m5  
+
+
+
+#using lm()
+#building the model using lm function in order to make evaluation using for y instead of logY
+
+m5_lm= lm(bikeCount1~as.factor(season)+as.factor(hour)+as.factor(IsHoliday)+as.factor(IsWeekday)+
+          as.factor(IsWeekday)*as.factor(hour)+temp+temp*as.factor(hour)+humidity+windspeed1,data=myProjectdata,x=T,y=T)
+summary(m5_lm) 
+
+
+
+#remove influencial points
+cooksd <- cooks.distance(m5_lm)
+influential <- as.numeric(names(cooksd)[(cooksd > (4/7538))])
+data7<-myProjectdata
+data7<-data7[-influential,]
+dim(data7)
+
+#model after removing infleutial points
+
+m5_lm1= lm(bikeCount1~as.factor(season)+as.factor(hour)+as.factor(IsHoliday)+as.factor(IsWeekday)+
+            as.factor(IsWeekday)*as.factor(hour)+temp+temp*as.factor(hour)+humidity+windspeed1,data=data6,x=T,y=T)
+summary(m5_lm1) 
+
+#model "m3" , introduce interaction term 
+
+m3 = glm(bikeCount1~as.factor(season)+as.factor(hour)+as.factor(IsHoliday)+as.factor(IsWeekday)+
+           as.factor(IsHoliday)+temp+humidity+windspeed1,data=data3)
+
+#renamed the new model to m6 after introducing interaction term
+
+m6 = glm(bikeCount1~as.factor(season)+as.factor(hour)+as.factor(IsHoliday)+as.factor(IsWeekday)+
+           as.factor(IsHoliday)+as.factor(IsWeekday)*as.factor(hour)
+         +temp+as.factor(hour)*temp+humidity+windspeed1,data=data3)
+
+summary(m6)  #AIC :5270.1
+
+#Check for intfluential point in model
+
+#model m5
+
+#remove influencial points
+cooksd <- cooks.distance(m6)
+influential <- as.numeric(names(cooksd)[(cooksd > (4/7538))])
+data6<-data3
+data6<-data6[-influential,]
+dim(data6)
+
+#Rebuild the model with new data set
+
+m6= glm(bikeCount1~as.factor(season)+as.factor(hour)+as.factor(IsHoliday)+as.factor(IsWeekday)+
+          as.factor(IsWeekday)*as.factor(hour)+temp+temp*as.factor(hour)+humidity+windspeed1,data=data6)
+summary(m6) 
+#AIC : 4878.9
+
+#Check MSE 
+
+mse_m6 = cv.glm(data6,m6,K=10)$delta
+mse_m6  #.1230360
+
+#m5 is the best model as its MSE value is least 
+
+#check for constant variance and normality 
+
+res=rstandard(m5)
+attach(mtcars)
+par(mfrow=c(2,3))
+plot(fitted(m5),res,main="Predicted vs residuals plot")
+abline(a=0,b=0,col='red')
+qqnorm(res)
+qqline(res,col=2)
+
+vif(m5)
+
+#Check MSE on all the models at once
+library(boot)
+head(myProjectdata)
+mse_full = cv.glm(myProjectdata,full,K=10)$delta
+mse_full1 = cv.glm(myProjectdata,full1,K=10)$delta
+mse_full2 = cv.glm(myProjectdata, full2,K=10)$delta
+mse_full3 = cv.glm(data, full3,K=10)$delta
+mse_m1 = cv.glm(data1, m1,K=10)$delta
+mse_m2 = cv.glm(data2, m2,K=10)$delta
+mse_m3 = cv.glm(data3, m3,K=10)$delta
+mse_m4 = cv.glm(data4, m4,K=10)$delta
+mse_m5 = cv.glm(data5, m5,K=10)$delta
+mse_m6 = cv.glm(data6, m6,K=10)$delta
+
+errs=cbind(mse_full,mse_full1,mse_full2,mse_full3,mse_m1,mse_m2,mse_m3,
+           mse_m4,mse_m5,mse_m6)
+errs
+
+
+install.packages("lmvar")
+
+library(lmvar)
+
+#Check MSE 
+
+
+cv.lm(full_lm,k=10,log=T)
+cv.lm(full1_lm,k=10,log=T)
+cv.lm(full2_lm,k=10,log=T)
+cv.lm(full3_lm,k=10,log=T)
+cv.lm(m4_lm,k=10,log=T)
+
+
+cv.lm(m5_lm,k=10,log=T)
+cv.lm(m5_lm1,k=10,log=T)
+
+vif(full2_lm)
